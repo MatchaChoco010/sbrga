@@ -1,0 +1,24 @@
+[package]
+name = "sbrga"
+version = "0.1.0"
+authors = ["Orito Itsuki <orito.itsuki@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+structopt = "0.3"
+thiserror = "*"
+anyhow = "*"
+image = "*"
+rand = "*"
+rand_distr = "*"
+rayon = "*"
+nalgebra = "*"
+sdl2 = { version = "0.34.0", features = ["bundled", "static-link"] }
+gl = "*"
+c_str_macro = "*"
+lerp = "*"
+chrono = "*"
+delta_e = "*"
+
+[build-dependencies]
+walkdir = "*"
