@@ -1,10 +1,10 @@
 #version 460 core
 
-out vec4 outColor;
+in vec4 vColor;
 
-uniform vec4 Color;
+out vec4 outColor;
 
 void main()
 {
-    outColor = Color;
+    outColor = vColor;
 }

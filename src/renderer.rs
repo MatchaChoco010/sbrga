@@ -1,8 +1,10 @@
+use std::time::Instant;
+
 use anyhow::Result;
 use c_str_macro::c_str;
 use delta_e::DE2000;
 use image;
-use na::{Matrix4, Point2, Point3, Vector2, Vector3, Vector4};
+use na::{Matrix4, Point3, Vector2, Vector3, Vector4};
 use nalgebra as na;
 use rayon::prelude::*;
 
@@ -20,7 +22,6 @@ pub struct Renderer {
     _shader_program: render_gl::Program,
     render_texture: gl::types::GLuint,
     frame_buffer: gl::types::GLuint,
-    color_loc: gl::types::GLint,
 }
 
 impl Renderer {
@@ -37,11 +38,9 @@ impl Renderer {
 
         let shader_program = render_gl::Program::from_res(&res, "shaders/stroke")?;
         let view_projection_loc;
-        let color_loc;
         unsafe {
             view_projection_loc =
                 gl::GetUniformLocation(shader_program.id(), c_str!("ViewProjection").as_ptr());
-            color_loc = gl::GetUniformLocation(shader_program.id(), c_str!("Color").as_ptr());
         }
 
         let view_matrix = Matrix4::look_at_rh(
@@ -110,122 +109,57 @@ impl Renderer {
             _shader_program: shader_program,
             render_texture,
             frame_buffer,
-            color_loc,
         })
     }
 
     fn render(&self, individual: &Individual) {
-        const CATMULL_ROM_SUBDIVISION: i32 = 3;
-
         self.color_buffer.clear();
 
-        for stroke in &individual.strokes {
-            let catmull_rom_vertices = {
-                let mut vertices: Vec<Point2<f32>> = vec![];
-                for i in 1..stroke.hopping_point.len() {
-                    for t in 0..CATMULL_ROM_SUBDIVISION {
-                        let t = t as f32 / CATMULL_ROM_SUBDIVISION as f32;
-                        let x = if i == 1 {
-                            let p1 = &stroke.hopping_point[i - 1].coords;
-                            let p2 = &stroke.hopping_point[i].coords;
-                            let p3 = &stroke.hopping_point[i + 1].coords;
-                            0.5 * ((p1 - 2.0 * p2 + p3) * t * t
-                                + (-3.0 * p1 + 4.0 * p2 - p3) * t
-                                + 2.0 * p1)
-                        } else if i == stroke.hopping_point.len() - 1 {
-                            let p0 = &stroke.hopping_point[i - 2].coords;
-                            let p1 = &stroke.hopping_point[i - 1].coords;
-                            let p2 = &stroke.hopping_point[i].coords;
-                            0.5 * ((p0 - 2.0 * p1 + p2) * t * t + (-p0 + p2) * t + 2.0 * p1)
-                        } else {
-                            let p0 = &stroke.hopping_point[i - 2].coords;
-                            let p1 = &stroke.hopping_point[i - 1].coords;
-                            let p2 = &stroke.hopping_point[i].coords;
-                            let p3 = &stroke.hopping_point[i + 1].coords;
-                            0.5 * ((-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t * t * t
-                                + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t
-                                + (-p0 + p3) * t
-                                + 2.0 * p1)
-                        };
-                        vertices.push(Point2::new(x.x, x.y));
-                    }
-                }
-                vertices
-            };
-
-            let vertices = {
-                let mut vertices: Vec<Point2<f32>> = vec![];
-                for i in 1..catmull_rom_vertices.len() {
-                    let p0 = if i == 1 {
-                        &catmull_rom_vertices[0]
-                    } else {
-                        &catmull_rom_vertices[i - 2]
-                    };
-                    let p1 = &catmull_rom_vertices[i - 1];
-                    let p2 = &catmull_rom_vertices[i];
-                    let p3 = if i == catmull_rom_vertices.len() - 1 {
-                        &catmull_rom_vertices[catmull_rom_vertices.len() - 1]
-                    } else {
-                        &catmull_rom_vertices[i + 1]
-                    };
-                    let d0 = (p2.coords - p0.coords).normalize();
-                    let d0 = Vector2::new(d0.y, -d0.x).normalize();
-                    let d1 = (p3.coords - p1.coords).normalize();
-                    let d1 = Vector2::new(d1.y, -d1.x).normalize();
-                    let v0 = p1 + d0 * stroke.thickness / 2.0;
-                    let v1 = p1 - d0 * stroke.thickness / 2.0;
-                    let v2 = p2 + d1 * stroke.thickness / 2.0;
-                    let v3 = p2 - d1 * stroke.thickness / 2.0;
-                    vertices.push(v0.clone());
-                    vertices.push(v1.clone());
-                    vertices.push(v2.clone());
-                    vertices.push(v2.clone());
-                    vertices.push(v1.clone());
-                    vertices.push(v3.clone());
-                }
-                vertices
-            };
-
-            let vertices = vertices
-                .iter()
-                .map(|p| {
-                    Vector3::new(
-                        p.coords.x - self.width as f32 / 2.0,
-                        (self.height as f32 - 1.0 - p.coords.y) - self.height as f32 / 2.0,
-                        0.0,
-                    )
-                })
-                .collect::<Vec<_>>();
-
-            let vbo = render_gl::buffer::ArrayBuffer::new();
-            vbo.bind();
-            vbo.static_draw_data(&vertices);
-            vbo.unbind();
-
-            let vao = render_gl::buffer::VertexArray::new();
-            vao.bind();
-            vbo.bind();
-            unsafe {
-                gl::EnableVertexAttribArray(0);
-                gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 0, std::ptr::null());
+        let mut vertices = vec![];
+        let mut colors = vec![];
+        individual.strokes.iter().for_each(|stroke| {
+            for v in stroke.vertices() {
+                vertices.push(Vector2::new(
+                    v.x - self.width as f32 / 2.0,
+                    (self.height as f32 - 1.0 - v.y) - self.height as f32 / 2.0,
+                ));
+                colors.push(stroke.color.clone());
             }
-            vbo.unbind();
-            vao.unbind();
+        });
 
-            unsafe {
-                gl::Uniform4f(
-                    self.color_loc,
-                    stroke.color.x,
-                    stroke.color.y,
-                    stroke.color.z,
-                    stroke.color.w,
-                );
-            }
-            vao.bind();
-            unsafe {
-                gl::DrawArrays(gl::TRIANGLES, 0, vertices.len() as i32);
-            }
+        let vertices_vbo = render_gl::buffer::ArrayBuffer::new();
+        vertices_vbo.bind();
+        vertices_vbo.static_draw_data(&vertices);
+        vertices_vbo.unbind();
+
+        let colors_vbo = render_gl::buffer::ArrayBuffer::new();
+        colors_vbo.bind();
+        colors_vbo.static_draw_data(&colors);
+        colors_vbo.unbind();
+
+        let vao = render_gl::buffer::VertexArray::new();
+        vao.bind();
+        vertices_vbo.bind();
+        unsafe {
+            gl::EnableVertexAttribArray(0);
+            gl::VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, 0, std::ptr::null());
         }
+        vertices_vbo.unbind();
+        colors_vbo.bind();
+        unsafe {
+            gl::EnableVertexAttribArray(1);
+            gl::VertexAttribPointer(1, 4, gl::FLOAT, gl::FALSE, 0, std::ptr::null());
+        }
+        colors_vbo.unbind();
+
+        // let start = Instant::now();
+
+        unsafe {
+            gl::DrawArrays(gl::TRIANGLES, 0, vertices.len() as i32);
+        }
+
+        // let end = start.elapsed();
+        // println!("Draw {}.{:03}s", end.as_secs(), end.as_millis());
     }
 
     pub fn render_to_vec(&mut self, individual: &Individual) -> Vec<Vector4<f32>> {
@@ -287,7 +221,11 @@ impl Renderer {
         importance: &Vec<f32>,
     ) -> f32 {
         let data = self.render_to_vec(individual);
-        data.par_iter()
+
+        // let start = Instant::now();
+
+        let score = data
+            .par_iter()
             .enumerate()
             .map(|(i, v)| {
                 let v0 = v;
@@ -308,11 +246,16 @@ impl Renderer {
 
                 let a0 = v0.w;
                 let a1 = 1.0;
-                let alpha_loss = (a0 - a1).powf(2.0) * 100.0;
+                let alpha_loss = (a0 - a1).powf(2.0) * 500.0;
 
                 (color_loss + alpha_loss) * w
             })
-            .sum()
+            .sum();
+
+        // let end = start.elapsed();
+        // println!("Score {}.{:03}s", end.as_secs(), end.as_millis());
+
+        score
     }
 
     pub fn update_viewport_size(&mut self, width: i32, height: i32) {
