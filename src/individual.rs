@@ -1,4 +1,5 @@
 use delta_e::DE2000;
+use float_cmp::*;
 use lerp::Lerp;
 use na::{Point2, Rotation2, Vector2, Vector3, Vector4};
 use nalgebra as na;
@@ -287,6 +288,30 @@ impl Stroke {
     }
 }
 
+impl PartialEq for Stroke {
+    fn eq(&self, other: &Stroke) -> bool {
+        if !(self.pos.x == other.pos.x) || !(self.pos.x == other.pos.x) {
+            return false;
+        }
+        if !approx_eq!(f32, self.thickness, other.thickness) {
+            return false;
+        }
+        let eq_iter = self
+            .hopping_point
+            .iter()
+            .zip(other.hopping_point.iter())
+            .map(|(a, b)| {
+                approx_eq!(f32, a.coords.x, b.coords.x) && approx_eq!(f32, a.coords.y, b.coords.y)
+            });
+        for b in eq_iter {
+            if !b {
+                return false;
+            }
+        }
+        true
+    }
+}
+
 #[derive(Clone)]
 pub struct Individual {
     pub strokes: Vec<Stroke>,
@@ -341,5 +366,15 @@ impl Individual {
         strokes.sort_unstable_by(|a, b| a.importance.partial_cmp(&b.importance).unwrap());
 
         Self { strokes }
+    }
+
+    pub fn distance(&self, other: &Self) -> i32 {
+        let mut distance = 0;
+        for i in 0..self.strokes.len() {
+            if self.strokes[i] == other.strokes[i] {
+                distance += 1;
+            }
+        }
+        distance
     }
 }

@@ -19,7 +19,7 @@ c_str_macro = "*"
 lerp = "*"
 chrono = "*"
 delta_e = "*"
-accel = "=0.3.1"
+float-cmp = "*"
 
 [build-dependencies]
 walkdir = "*"

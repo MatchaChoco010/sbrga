@@ -1,6 +1,7 @@
+use std::cell::RefCell;
 use std::path::Path;
+use std::rc::Rc;
 
-// use accel::*;
 use anyhow::Result;
 use chrono::Local;
 use image::{self, GenericImageView};
@@ -25,8 +26,8 @@ pub fn genetic_algorithm(
     save_generation: Vec<usize>,
     save_generation_step: usize,
 ) -> Result<()> {
-    const PROBABILITY_OF_MUTATION: f64 = 0.01;
-    const PROBABILITY_BIAS: f32 = 10.0;
+    const PROBABILITY_OF_MUTATION: f64 = 0.35;
+    const DISTANCE_RATE: f64 = 0.5;
 
     println!("[{}] Start GA...", Local::now());
 
@@ -108,9 +109,6 @@ pub fn genetic_algorithm(
     let _gl_context = window.gl_create_context().unwrap();
     gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::os::raw::c_void);
 
-    // let device = Device::nth(0)?;
-    // let ctx = device.create_context();
-
     let mut event_pump = sdl.event_pump().unwrap();
 
     let mut renderer = renderer::Renderer::new(width, height, &res)?;
@@ -120,7 +118,7 @@ pub fn genetic_algorithm(
 
     let mut population = (0..population_size)
         .map(|_| {
-            Individual::new(
+            Rc::new(RefCell::new(Individual::new(
                 &colors,
                 &directions,
                 &importance,
@@ -128,112 +126,138 @@ pub fn genetic_algorithm(
                 height,
                 stroke_num,
                 stroke_thickness,
-            )
+            )))
         })
         .collect::<Vec<_>>();
+    let mut population_scores = population
+        .iter()
+        .cloned()
+        .map(|i| (i.clone(), renderer.score(&i.borrow(), &colors, &importance)))
+        .collect::<Vec<_>>();
+    population_scores
+        .sort_unstable_by(|(_, score_a), (_, score_b)| score_a.partial_cmp(score_b).unwrap());
+
+    let (top_individual, top_score) = population_scores[0].clone();
+
+    // let mut new_population: Vec<Individual> = vec![];
+
+    println!("[{}] top score: {}", Local::now(), top_score);
+    for _ in event_pump.poll_iter() {}
+    renderer.show(&top_individual.borrow());
+    window.gl_swap_window();
 
     let mut rng = thread_rng();
-    let dist05 = WeightedIndex::new(vec![1.0, 1.0]).unwrap();
+
+    let mut crossover_pos = (0..(population_size / 2))
+        .map(|_| true)
+        .chain((0..(population_size - population_size / 2)).map(|_| false))
+        .collect::<Vec<_>>();
+    let select_from_all_dist = WeightedIndex::new((0..population_size).map(|_| 1.0)).unwrap();
+    let select_from_distance_rate_dist =
+        WeightedIndex::new((0..((population_size as f64 * DISTANCE_RATE) as usize)).map(|_| 1.0))
+            .unwrap();
+
+    // let dist05 = WeightedIndex::new(vec![1.0, 1.0]).unwrap();
     let dist_mutation =
         WeightedIndex::new(vec![1.0 - PROBABILITY_OF_MUTATION, PROBABILITY_OF_MUTATION]).unwrap();
 
-    // let _ = population
-    //     .iter()
-    //     .map(|i| renderer.score_accel(ctx.clone(), i, &colors, &importance))
-    //     .collect::<Vec<_>>();
+    let mut d = (top_individual.borrow().strokes.len() / 4) as i32;
+    let mut last_top_individual = top_individual;
 
     for gen in 1..=generation {
         println!("[{}] generation {:>5}", Local::now(), { gen });
-        let mut population_scores = population
+
+        // generate new population
+        let mut new_population = vec![];
+        while new_population.len() < population_size as usize {
+            let p0 = population[select_from_all_dist.sample(&mut rng)].clone();
+            let mut population_clone = population.clone();
+            population_clone.sort_unstable_by_key(|i| i.borrow().distance(&p0.borrow()));
+            let p1 = population_clone[select_from_distance_rate_dist.sample(&mut rng)].clone();
+            crossover_pos.shuffle(&mut rng);
+            for (i, &flag) in crossover_pos.iter().enumerate() {
+                if flag {
+                    let s0 = p0.borrow().strokes[i].clone();
+                    let s1 = p1.borrow().strokes[i].clone();
+                    p0.borrow_mut().strokes[i] = s1;
+                    p1.borrow_mut().strokes[i] = s0;
+                }
+            }
+            new_population.push(p0);
+            if new_population.len() < population.len() {
+                new_population.push(p1);
+            }
+        }
+        let mut new_population_scores = new_population
             .iter()
-            .map(|i| (i, renderer.score(i, &colors, &importance)))
+            .cloned()
+            .map(|i| (i.clone(), renderer.score(&i.borrow(), &colors, &importance)))
             .collect::<Vec<_>>();
-        population_scores
-            .sort_unstable_by(|(_, score_a), (_, score_b)| score_a.partial_cmp(score_b).unwrap());
 
-        let (top_individual, top_score) = population_scores[0];
+        // selecting from two generation
+        population_scores.append(&mut new_population_scores);
+        population_scores.sort_unstable_by(|(_, s0), (_, s1)| s0.partial_cmp(s1).unwrap());
+        let _ = population_scores.split_off(population.len());
 
+        population = population_scores
+            .iter()
+            .cloned()
+            .map(|(i, _)| i)
+            .collect::<Vec<_>>();
+
+        // show top individual
+        let (top_individual, top_score) = population_scores[0].clone();
         println!("[{}] top score: {}", Local::now(), top_score);
         for _ in event_pump.poll_iter() {}
-        renderer.show(&top_individual);
+        renderer.show(&top_individual.borrow());
         window.gl_swap_window();
 
         // 保存指定されていたジェネレーションならば保存する。
         if save_generation.contains(&gen) {
             let output_path = output_path.to_string() + ".gen-" + &gen.to_string() + ".png";
-            renderer.render_to_file(&top_individual, &output_path)?;
+            renderer.render_to_file(&top_individual.borrow(), &output_path)?;
             println!("[{}] save file: {}", Local::now(), output_path);
         }
 
-        println!("[{}] create populations...", Local::now());
+        if top_individual
+            .borrow()
+            .distance(&last_top_individual.borrow())
+            == 0
+        {
+            d -= 1;
 
-        population = population_scores
-            .into_iter()
-            .map(|(i, _)| i.clone())
-            .collect();
-        let mut population_clone = population.clone();
-
-        let top_index = (population.len() as f64 * 0.1) as usize;
-        let bottom_index = (population.len() as f64 * 0.9) as usize;
-        let _ = population.split_off(top_index);
-        let _ = population_clone.split_off(bottom_index);
-
-        let dist = WeightedIndex::new(
-            (1..=population_clone.len()).map(|i| 1.0 / (i as f32 + PROBABILITY_BIAS)),
-        )
-        .unwrap();
-
-        while population.len() != population_size as usize {
-            let mut i0 = population_clone[dist.sample(&mut rng)].clone();
-            let mut i1 = population_clone[dist.sample(&mut rng)].clone();
-            let i_other = Individual::new(
-                &colors,
-                &directions,
-                &importance,
-                width,
-                height,
-                stroke_num,
-                stroke_thickness,
-            );
-
-            for i in 0..(i0.strokes.len()) {
-                let flag = dist05.sample(&mut rng);
-                if flag == 1 {
-                    let s0 = i0.strokes[i].clone();
-                    let s1 = i1.strokes[i].clone();
-                    i0.strokes[i] = s1;
-                    i1.strokes[i] = s0;
+            if d < 0 {
+                println!("[{}] mutation...", Local::now());
+                let _ = population_scores.split_off(1);
+                while population.len() < population_size as usize {
+                    let i_other = Individual::new(
+                        &colors,
+                        &directions,
+                        &importance,
+                        width,
+                        height,
+                        stroke_num,
+                        stroke_thickness,
+                    );
+                    let i = top_individual.clone();
+                    for index in 0..i.borrow().strokes.len() {
+                        if dist_mutation.sample(&mut rng) == 1 {
+                            i.borrow_mut().strokes[index] = i_other.strokes[index].clone();
+                        }
+                    }
+                    population_scores
+                        .push((i.clone(), renderer.score(&i.borrow(), &colors, &importance)));
                 }
-            }
-
-            for i in 0..(i0.strokes.len()) {
-                let flag = dist_mutation.sample(&mut rng);
-                if flag == 1 {
-                    let s_other = i_other.strokes[i].clone();
-                    i0.strokes[i] = s_other;
-                }
-            }
-            for i in 0..(i1.strokes.len()) {
-                let flag = dist_mutation.sample(&mut rng);
-                if flag == 1 {
-                    let s_other = i_other.strokes[i].clone();
-                    i1.strokes[i] = s_other;
-                }
-            }
-
-            population.push(i0);
-            population.push(i1);
-
-            if population.len() >= population_size as usize {
-                population.pop();
             }
         }
+
+        last_top_individual = top_individual;
     }
 
     println!("[{}] final generation", Local::now());
     let mut population_scores = population
         .iter()
-        .map(|i| (i, renderer.score(i, &colors, &importance)))
+        .map(|i| (i, renderer.score(&i.borrow(), &colors, &importance)))
         .collect::<Vec<_>>();
     population_scores
         .sort_unstable_by(|(_, score_a), (_, score_b)| score_a.partial_cmp(score_b).unwrap());
@@ -241,7 +265,7 @@ pub fn genetic_algorithm(
     let (top_individual, top_score) = population_scores[0];
     println!("[{}] final score: {}", Local::now(), top_score);
 
-    renderer.render_to_file(&top_individual, output_path)?;
+    renderer.render_to_file(&top_individual.borrow(), output_path)?;
 
     'main: loop {
         for event in event_pump.poll_iter() {
@@ -267,7 +291,7 @@ pub fn genetic_algorithm(
             }
         }
 
-        renderer.show(&top_individual);
+        renderer.show(&top_individual.borrow());
         window.gl_swap_window();
     }
 
