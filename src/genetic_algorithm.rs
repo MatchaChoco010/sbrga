@@ -1,5 +1,6 @@
 use std::path::Path;
 
+// use accel::*;
 use anyhow::Result;
 use chrono::Local;
 use image::{self, GenericImageView};
@@ -107,6 +108,9 @@ pub fn genetic_algorithm(
     let _gl_context = window.gl_create_context().unwrap();
     gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::os::raw::c_void);
 
+    // let device = Device::nth(0)?;
+    // let ctx = device.create_context();
+
     let mut event_pump = sdl.event_pump().unwrap();
 
     let mut renderer = renderer::Renderer::new(width, height, &res)?;
@@ -132,6 +136,11 @@ pub fn genetic_algorithm(
     let dist05 = WeightedIndex::new(vec![1.0, 1.0]).unwrap();
     let dist_mutation =
         WeightedIndex::new(vec![1.0 - PROBABILITY_OF_MUTATION, PROBABILITY_OF_MUTATION]).unwrap();
+
+    // let _ = population
+    //     .iter()
+    //     .map(|i| renderer.score_accel(ctx.clone(), i, &colors, &importance))
+    //     .collect::<Vec<_>>();
 
     for gen in 1..=generation {
         println!("[{}] generation {:>5}", Local::now(), { gen });

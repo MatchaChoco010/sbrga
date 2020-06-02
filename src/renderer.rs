@@ -1,5 +1,7 @@
-use std::time::Instant;
+// use std::sync::Arc;
+// use std::time::Instant;
 
+// use accel::*;
 use anyhow::Result;
 use c_str_macro::c_str;
 use delta_e::DE2000;
@@ -258,6 +260,43 @@ impl Renderer {
         score
     }
 
+    // pub fn score_accel(
+    //     &mut self,
+    //     ctx: Arc<Context>,
+    //     individual: &Individual,
+    //     colors: &Vec<Vector3<f32>>,
+    //     importance: &Vec<f32>,
+    // ) -> f32 {
+    //     let data = self.render_to_vec(individual);
+
+    //     // Allocate memories on GPU
+    //     let n = 32;
+    //     let mut a = DeviceMemory::<f32>::zeros(ctx.clone(), n);
+    //     let mut b = DeviceMemory::<f32>::zeros(ctx.clone(), n);
+    //     let mut c = DeviceMemory::<f32>::zeros(ctx.clone(), n);
+
+    //     // Accessible from CPU as usual Rust slice (though this will be slow)
+    //     for i in 0..n {
+    //         a[i] = i as f32;
+    //         b[i] = 2.0 * i as f32;
+    //     }
+    //     println!("a = {:?}", a.as_slice());
+    //     println!("b = {:?}", b.as_slice());
+
+    //     // Launch kernel synchronously
+    //     add(
+    //         ctx,
+    //         1, /* grid */
+    //         n, /* block */
+    //         &(&a.as_ptr(), &b.as_ptr(), &c.as_mut_ptr(), &n),
+    //     )
+    //     .expect("Kernel call failed");
+
+    //     println!("c = {:?}", c.as_slice());
+
+    //     0.0
+    // }
+
     pub fn update_viewport_size(&mut self, width: i32, height: i32) {
         self.v_width = width;
         self.v_height = height;
@@ -274,3 +313,11 @@ impl Drop for Renderer {
         }
     }
 }
+
+// #[kernel]
+// unsafe fn add(a: *const f32, b: *const f32, c: *mut f32, n: usize) {
+//     let i = accel_core::index();
+//     if (i as usize) < n {
+//         *c.offset(i) = *a.offset(i) + *b.offset(i);
+//     }
+// }
