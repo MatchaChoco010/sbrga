@@ -263,7 +263,7 @@ impl Renderer {
         self.render(individual);
 
         let mut data = vec![
-            Vector4::<f32>::zeros();
+            Vector4::<gl::types::GLuint>::zeros();
             (self.save_image_width * self.save_image_height) as usize
         ];
         unsafe {
@@ -273,7 +273,7 @@ impl Renderer {
                 self.save_image_width as i32,
                 self.save_image_height as i32,
                 gl::RGBA,
-                gl::FLOAT,
+                gl::UNSIGNED_INT,
                 data.as_mut_ptr() as *mut gl::types::GLvoid,
             );
         }
@@ -283,12 +283,7 @@ impl Renderer {
         for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
             let p = data[((self.save_image_height - 1 - y as i32) * self.save_image_width
                 + x as i32) as usize];
-            *pixel = image::Rgba([
-                (255.0 * p.x) as u8,
-                (255.0 * p.y) as u8,
-                (255.0 * p.z) as u8,
-                (255.0 * p.w) as u8,
-            ]);
+            *pixel = image::Rgba([p.x as u8, p.y as u8, p.z as u8, p.w as u8]);
         }
         imgbuf.save(output_path)?;
 
