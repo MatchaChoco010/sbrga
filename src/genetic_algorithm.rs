@@ -280,7 +280,8 @@ pub fn genetic_algorithm(
                         stroke_thickness,
                     );
                     let i = Rc::new(RefCell::new(top_individual.borrow().clone()));
-                    for index in 0..i.borrow().strokes.len() {
+                    let stroke_len = i.borrow().strokes.len();
+                    for index in 0..stroke_len {
                         if dist_mutation.sample(&mut rng) == 1 {
                             i.borrow_mut().strokes[index] = i_other.strokes[index].clone();
                         }
