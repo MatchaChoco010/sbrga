@@ -29,7 +29,7 @@ pub fn genetic_algorithm(
     save_height: i32,
 ) -> Result<()> {
     const PROBABILITY_OF_MUTATION: f64 = 0.35;
-    const PROBABILITY_CROSSOVER_BIAS: f64 = 50.0;
+    // const PROBABILITY_CROSSOVER_BIAS: f64 = 50.0;
     // const DISTANCE_RATE: f64 = 0.5;
 
     println!("[{}] Start GA...", Local::now());
@@ -53,13 +53,7 @@ pub fn genetic_algorithm(
 
     let colors = color_map
         .pixels()
-        .map(|(_, _, p)| {
-            Vector3::new(
-                p[0] as f32 / 255.0,
-                p[1] as f32 / 255.0,
-                p[2] as f32 / 255.0,
-            )
-        })
+        .map(|(_, _, p)| Vector3::new(p[0], p[1], p[2]))
         .collect::<Vec<_>>();
 
     let directions = dir_map
@@ -161,14 +155,14 @@ pub fn genetic_algorithm(
                 .map(|_| false),
         )
         .collect::<Vec<_>>();
-    // let select_from_all_dist = WeightedIndex::new((0..population_size).map(|_| 1.0)).unwrap();
+    let select_from_all_dist = WeightedIndex::new((0..population_size).map(|_| 1.0)).unwrap();
     // let select_from_distance_rate_dist =
     //     WeightedIndex::new((0..((population_size as f64 * DISTANCE_RATE) as usize)).map(|_| 1.0))
     //         .unwrap();
-    let select_from_all_dist = WeightedIndex::new(
-        (0..population_size).map(|i| 1.0 / (i as f64 + PROBABILITY_CROSSOVER_BIAS)),
-    )
-    .unwrap();
+    // let select_from_all_dist = WeightedIndex::new(
+    //     (0..population_size).map(|i| 1.0 / (i as f64 + PROBABILITY_CROSSOVER_BIAS)),
+    // )
+    // .unwrap();
 
     // let dist05 = WeightedIndex::new(vec![1.0, 1.0]).unwrap();
     let dist_mutation =
@@ -292,7 +286,7 @@ pub fn genetic_algorithm(
                 }
 
                 // d = (top_individual.borrow().strokes.len() as f32 * 0.35 * (1.0 - 0.35)) as i32;
-                d = 25;
+                d = 50;
             }
         }
 

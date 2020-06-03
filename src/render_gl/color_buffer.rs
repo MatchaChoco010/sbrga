@@ -9,17 +9,17 @@ pub struct ColorBuffer {
 impl ColorBuffer {
     pub fn from_color(color: Vector3<f32>) -> Self {
         Self {
-            color: color.fixed_resize::<na::U4, na::U1>(1.0),
+            color: color.fixed_resize::<na::U4, na::U1>(0.0),
         }
     }
 
     pub fn update_color(&mut self, color: Vector3<f32>) {
-        self.color = color.fixed_resize::<na::U4, na::U1>(1.0);
+        self.color = color.fixed_resize::<na::U4, na::U1>(0.0);
     }
 
     pub fn set_used(&self) {
         unsafe {
-            gl::ClearColor(self.color.x, self.color.y, self.color.z, 1.0);
+            gl::ClearColor(self.color.x, self.color.y, self.color.z, self.color.w);
         }
     }
 

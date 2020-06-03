@@ -33,13 +33,7 @@ pub fn create_individual(
 
     let colors = color_map
         .pixels()
-        .map(|(_, _, p)| {
-            Vector3::new(
-                p[0] as f32 / 255.0,
-                p[1] as f32 / 255.0,
-                p[2] as f32 / 255.0,
-            )
-        })
+        .map(|(_, _, p)| Vector3::new(p[0], p[1], p[2]))
         .collect::<Vec<_>>();
 
     let directions = dir_map

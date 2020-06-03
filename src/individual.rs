@@ -12,7 +12,7 @@ use rayon::prelude::*;
 #[derive(Clone)]
 pub struct Stroke {
     pub pos: Vector2<i32>,
-    pub color: Vector4<f32>,
+    pub color: Vector4<u8>,
     pub hopping_point: Vec<Point2<f32>>,
     pub thickness: f32,
     importance: f32,
@@ -21,7 +21,7 @@ pub struct Stroke {
 impl Stroke {
     pub fn new(
         index: usize,
-        colors: &Vec<Vector3<f32>>,
+        colors: &Vec<Vector3<u8>>,
         directions: &Vec<Vector2<f32>>,
         importance: &Vec<f32>,
         width: i32,
@@ -57,7 +57,7 @@ impl Stroke {
 
         let color = {
             let color = colors[index];
-            Vector4::new(color.x, color.y, color.z, 1.0)
+            Vector4::new(color.x, color.y, color.z, 255)
         };
 
         let thickness = {
@@ -165,23 +165,11 @@ impl Stroke {
                     + hop_point.coords.x.round() as i32) as usize;
                 let hop_color = if hop_index < colors.len() - 1 {
                     let hop_color = colors[hop_index];
-                    [
-                        (hop_color.x * 255.0) as u8,
-                        (hop_color.y * 255.0) as u8,
-                        (hop_color.z * 255.0) as u8,
-                    ]
+                    [hop_color.x, hop_color.y, hop_color.z]
                 } else {
-                    [
-                        (color.x * 255.0) as u8,
-                        (color.y * 255.0) as u8,
-                        (color.z * 255.0) as u8,
-                    ]
+                    [color.x, color.y, color.z]
                 };
-                let stroke_color = [
-                    (color.x * 255.0) as u8,
-                    (color.y * 255.0) as u8,
-                    (color.z * 255.0) as u8,
-                ];
+                let stroke_color = [color.x, color.y, color.z];
 
                 if DE2000::from_rgb(&stroke_color, &hop_color)
                     > hop_end_distance_normal
@@ -354,7 +342,7 @@ pub struct Individual {
 
 impl Individual {
     pub fn new(
-        colors: &Vec<Vector3<f32>>,
+        colors: &Vec<Vector3<u8>>,
         directions: &Vec<Vector2<f32>>,
         importance: &Vec<f32>,
         width: i32,

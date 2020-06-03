@@ -216,7 +216,7 @@ impl Renderer {
         }
     }
 
-    pub fn render_to_vec(&mut self, individual: &Individual) -> Vec<Vector4<f32>> {
+    pub fn render_to_vec(&mut self, individual: &Individual) -> Vec<Vector4<u8>> {
         unsafe {
             gl::BindFramebuffer(gl::FRAMEBUFFER, self.frame_buffer);
         }
@@ -236,7 +236,7 @@ impl Renderer {
                 self.width as i32,
                 self.height as i32,
                 gl::RGBA,
-                gl::FLOAT,
+                gl::UNSIGNED_INT,
                 data.as_mut_ptr() as *mut gl::types::GLvoid,
             );
         }
@@ -299,7 +299,7 @@ impl Renderer {
     pub fn score(
         &mut self,
         individual: &Individual,
-        colors: &Vec<Vector3<f32>>,
+        colors: &Vec<Vector3<u8>>,
         importance: &Vec<f32>,
     ) -> f32 {
         // println!("[{}] render to vec", Local::now());
@@ -314,19 +314,11 @@ impl Renderer {
                 let v1 = colors[i];
                 let w = importance[i];
 
-                let c0 = [
-                    (v0.x * 255.0) as u8,
-                    (v0.y * 255.0) as u8,
-                    (v0.z * 255.0) as u8,
-                ];
-                let c1 = [
-                    (v1.x * 255.0) as u8,
-                    (v1.y * 255.0) as u8,
-                    (v1.z * 255.0) as u8,
-                ];
+                let c0 = [v0.x, v0.y, v0.z];
+                let c1 = [v1.x, v1.y, v1.z];
                 let color_loss = DE2000::from_rgb(&c0, &c1);
 
-                let a0 = v0.w;
+                let a0 = v0.w as f32 / 255.0;
                 let a1 = 1.0;
                 let alpha_loss = (a0 - a1).powf(2.0) * 500.0;
 
