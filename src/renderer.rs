@@ -90,7 +90,7 @@ impl Renderer {
                 height as i32,
                 0,
                 gl::RGBA,
-                gl::FLOAT,
+                gl::UNSIGNED_INT,
                 std::ptr::null() as *const gl::types::GLvoid,
             );
             gl::BindTexture(gl::TEXTURE_2D, 0);
@@ -121,7 +121,7 @@ impl Renderer {
                 save_image_height as i32,
                 0,
                 gl::RGBA,
-                gl::FLOAT,
+                gl::UNSIGNED_INT,
                 std::ptr::null() as *const gl::types::GLvoid,
             );
             gl::BindTexture(gl::TEXTURE_2D, 0);
@@ -172,7 +172,12 @@ impl Renderer {
                         v.x - self.width as f32 / 2.0,
                         (self.height as f32 - 1.0 - v.y) - self.height as f32 / 2.0,
                     ));
-                    colors.push(stroke.color.clone());
+                    colors.push(Vector4::new(
+                        stroke.color.x as f32 / 255.0,
+                        stroke.color.y as f32 / 255.0,
+                        stroke.color.z as f32 / 255.0,
+                        stroke.color.w as f32 / 255.0,
+                    ));
                 }
                 (vertices, colors)
             })
@@ -228,7 +233,8 @@ impl Renderer {
         self.render(individual);
 
         // println!("[{}] read pixels", Local::now());
-        let mut data = vec![Vector4::zeros(); (self.width * self.height) as usize];
+        let mut data =
+            vec![Vector4::<gl::types::GLuint>::zeros(); (self.width * self.height) as usize];
         unsafe {
             gl::ReadPixels(
                 0,
@@ -240,7 +246,9 @@ impl Renderer {
                 data.as_mut_ptr() as *mut gl::types::GLvoid,
             );
         }
-        data
+        data.into_iter()
+            .map(|c| Vector4::new(c.x as u8, c.y as u8, c.z as u8, c.w as u8))
+            .collect()
     }
 
     pub fn render_to_file(&mut self, individual: &Individual, output_path: &str) -> Result<()> {
