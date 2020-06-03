@@ -419,7 +419,7 @@ impl Individual {
     pub fn distance(&self, other: &Self) -> i32 {
         let mut distance = 0;
         for i in 0..self.strokes.len() {
-            if self.strokes[i] == other.strokes[i] {
+            if self.strokes[i] != other.strokes[i] {
                 distance += 1;
             }
         }

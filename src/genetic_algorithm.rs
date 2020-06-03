@@ -179,17 +179,29 @@ pub fn genetic_algorithm(
     let mut last_top_individual = top_individual;
 
     for gen in 1..=generation {
-        println!("[{}] generation {:>5}", Local::now(), { gen });
+        println!("[{}] generation: {:>5}, d: {}", Local::now(), { gen }, d);
 
         println!("[{}] generate new population", Local::now());
         // generate new population
         let mut new_population = vec![];
         while new_population.len() < population_size as usize {
-            let p0 = population[select_from_all_dist.sample(&mut rng)].clone();
+            let p0 = Rc::new(RefCell::new(
+                population[select_from_all_dist.sample(&mut rng)]
+                    .borrow()
+                    .clone(),
+            ));
             // let mut population_clone = population.clone();
             // population_clone.sort_unstable_by_key(|i| i.borrow().distance(&p0.borrow()));
-            // let p1 = population_clone[select_from_distance_rate_dist.sample(&mut rng)].clone();
-            let p1 = population[select_from_all_dist.sample(&mut rng)].clone();
+            // let p1 = Rc::new(RefCell::new(
+            //     population_clone[select_from_distance_rate_dist.sample(&mut rng)]
+            //         .borrow()
+            //         .clone(),
+            // ));
+            let p1 = Rc::new(RefCell::new(
+                population[select_from_all_dist.sample(&mut rng)]
+                    .borrow()
+                    .clone(),
+            ));
             crossover_pos.shuffle(&mut rng);
             for (i, &flag) in crossover_pos.iter().enumerate() {
                 if flag {
@@ -200,7 +212,7 @@ pub fn genetic_algorithm(
                 }
             }
             new_population.push(p0);
-            if new_population.len() < population.len() {
+            if new_population.len() < population_size as usize {
                 new_population.push(p1);
             }
         }
@@ -256,7 +268,8 @@ pub fn genetic_algorithm(
             if d < 0 {
                 println!("[{}] mutation...", Local::now());
                 let _ = population_scores.split_off(1);
-                while population.len() < population_size as usize {
+                let _ = population.split_off(1);
+                while population_scores.len() < population_size as usize {
                     let i_other = Individual::new(
                         &colors,
                         &directions,
@@ -266,7 +279,7 @@ pub fn genetic_algorithm(
                         stroke_num,
                         stroke_thickness,
                     );
-                    let i = top_individual.clone();
+                    let i = Rc::new(RefCell::new(top_individual.borrow().clone()));
                     for index in 0..i.borrow().strokes.len() {
                         if dist_mutation.sample(&mut rng) == 1 {
                             i.borrow_mut().strokes[index] = i_other.strokes[index].clone();
@@ -274,6 +287,7 @@ pub fn genetic_algorithm(
                     }
                     population_scores
                         .push((i.clone(), renderer.score(&i.borrow(), &colors, &importance)));
+                    population.push(i.clone());
                 }
 
                 // d = (top_individual.borrow().strokes.len() as f32 * 0.35 * (1.0 - 0.35)) as i32;
