@@ -14,7 +14,7 @@ mod renderer;
 mod triangle;
 mod visualize_direction_map;
 
-use create_direction_map::create_direction_map;
+use create_direction_map::{create_direction_map_from_edge, create_direction_map_from_normal};
 use create_individual::create_individual;
 use genetic_algorithm::genetic_algorithm;
 use visualize_direction_map::visualize_direction_map;
@@ -22,8 +22,15 @@ use visualize_direction_map::visualize_direction_map;
 #[structopt(name = "sbrga", about = "A stroke based rendering tool set.")]
 enum Sbrga {
     #[structopt(about = "create direction map from normal map")]
-    Dirmap {
+    CreateDirmapFromNormal {
         #[structopt(parse(from_os_str), about = "input normal map path")]
+        input: PathBuf,
+        #[structopt(parse(from_os_str), short, long, about = "output file path")]
+        output: Option<PathBuf>,
+    },
+    #[structopt(about = "create direction map from edge map")]
+    CreateDirmapFromEdge {
+        #[structopt(parse(from_os_str), about = "input edge map path")]
         input: PathBuf,
         #[structopt(parse(from_os_str), short, long, about = "output file path")]
         output: Option<PathBuf>,
@@ -70,6 +77,10 @@ enum Sbrga {
         save_generation: Vec<usize>,
         #[structopt(long, about = "save generation step")]
         save_generation_step: usize,
+        #[structopt(long, about = "save file width")]
+        width: i32,
+        #[structopt(long, about = "save file height")]
+        height: i32,
     },
 }
 
@@ -77,7 +88,7 @@ fn main() -> Result<()> {
     let opt = Sbrga::from_args();
 
     match opt {
-        Sbrga::Dirmap { input, output } => {
+        Sbrga::CreateDirmapFromNormal { input, output } => {
             println!("Normal map file: {}", input.to_str().unwrap());
             let output = if let Some(o) = output {
                 o
@@ -89,7 +100,21 @@ fn main() -> Result<()> {
                 }
             };
             println!(">> Output file: {}", output.to_str().unwrap());
-            create_direction_map(input.to_str().unwrap(), output.to_str().unwrap());
+            create_direction_map_from_normal(input.to_str().unwrap(), output.to_str().unwrap());
+        }
+        Sbrga::CreateDirmapFromEdge { input, output } => {
+            println!("Edge map file: {}", input.to_str().unwrap());
+            let output = if let Some(o) = output {
+                o
+            } else {
+                if let Some(ext) = input.extension() {
+                    input.with_extension("dir.".to_string() + ext.to_str().unwrap())
+                } else {
+                    input.with_extension("dir")
+                }
+            };
+            println!(">> Output file: {}", output.to_str().unwrap());
+            create_direction_map_from_edge(input.to_str().unwrap(), output.to_str().unwrap());
         }
         Sbrga::VisualizeDirmap { input } => {
             visualize_direction_map(input.to_str().unwrap(), 100, 100)?;
@@ -122,6 +147,8 @@ fn main() -> Result<()> {
             generation,
             save_generation,
             save_generation_step,
+            width,
+            height,
         } => genetic_algorithm(
             color_map.to_str().unwrap(),
             dir_map.to_str().unwrap(),
@@ -133,6 +160,8 @@ fn main() -> Result<()> {
             generation,
             save_generation,
             save_generation_step,
+            width,
+            height,
         )?,
     }
 

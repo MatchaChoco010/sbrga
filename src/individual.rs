@@ -1,3 +1,4 @@
+// use chrono::Local;
 use delta_e::DE2000;
 use float_cmp::*;
 use lerp::Lerp;
@@ -6,6 +7,7 @@ use nalgebra as na;
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
 use rand_distr::Normal;
+use rayon::prelude::*;
 
 #[derive(Clone)]
 pub struct Stroke {
@@ -41,8 +43,8 @@ impl Stroke {
         #[allow(non_snake_case)]
         let HOP_ANGLE_MAX: f32 = 45.0_f32.to_radians();
 
-        const HOP_END_COLOR_DISTANCE_MEAN: f32 = 5.0;
-        const HOP_END_COLOR_DISTANCE_VARIANCE: f32 = 15.0;
+        const HOP_END_COLOR_DISTANCE_MEAN: f32 = 3.0;
+        const HOP_END_COLOR_DISTANCE_VARIANCE: f32 = 10.0;
         const HOP_END_COLOR_DISTANCE_MIN: f32 = 2.0;
 
         let mut rng = thread_rng();
@@ -216,55 +218,88 @@ impl Stroke {
     }
 
     pub fn vertices(&self) -> Vec<Vector2<f32>> {
-        const CATMULL_ROM_SUBDIVISION: i32 = 10;
+        // const CATMULL_ROM_SUBDIVISION: i32 = 1;
 
-        let catmull_rom_vertices = {
-            let mut vertices: Vec<Point2<f32>> = vec![];
-            for i in 1..self.hopping_point.len() {
-                for t in 0..CATMULL_ROM_SUBDIVISION {
-                    let t = t as f32 / CATMULL_ROM_SUBDIVISION as f32;
-                    let x = if i == 1 {
-                        let p1 = &self.hopping_point[i - 1].coords;
-                        let p2 = &self.hopping_point[i].coords;
-                        let p3 = &self.hopping_point[i + 1].coords;
-                        0.5 * ((p1 - 2.0 * p2 + p3) * t * t
-                            + (-3.0 * p1 + 4.0 * p2 - p3) * t
-                            + 2.0 * p1)
-                    } else if i == self.hopping_point.len() - 1 {
-                        let p0 = &self.hopping_point[i - 2].coords;
-                        let p1 = &self.hopping_point[i - 1].coords;
-                        let p2 = &self.hopping_point[i].coords;
-                        0.5 * ((p0 - 2.0 * p1 + p2) * t * t + (-p0 + p2) * t + 2.0 * p1)
-                    } else {
-                        let p0 = &self.hopping_point[i - 2].coords;
-                        let p1 = &self.hopping_point[i - 1].coords;
-                        let p2 = &self.hopping_point[i].coords;
-                        let p3 = &self.hopping_point[i + 1].coords;
-                        0.5 * ((-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t * t * t
-                            + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t
-                            + (-p0 + p3) * t
-                            + 2.0 * p1)
-                    };
-                    vertices.push(Point2::new(x.x, x.y));
-                }
-            }
-            vertices
-        };
+        // let catmull_rom_vertices = {
+        //     let mut vertices: Vec<Point2<f32>> = vec![];
+        //     for i in 1..self.hopping_point.len() {
+        //         for t in 0..CATMULL_ROM_SUBDIVISION {
+        //             let t = t as f32 / CATMULL_ROM_SUBDIVISION as f32;
+        //             let x = if i == 1 {
+        //                 let p1 = &self.hopping_point[i - 1].coords;
+        //                 let p2 = &self.hopping_point[i].coords;
+        //                 let p3 = &self.hopping_point[i + 1].coords;
+        //                 0.5 * ((p1 - 2.0 * p2 + p3) * t * t
+        //                     + (-3.0 * p1 + 4.0 * p2 - p3) * t
+        //                     + 2.0 * p1)
+        //             } else if i == self.hopping_point.len() - 1 {
+        //                 let p0 = &self.hopping_point[i - 2].coords;
+        //                 let p1 = &self.hopping_point[i - 1].coords;
+        //                 let p2 = &self.hopping_point[i].coords;
+        //                 0.5 * ((p0 - 2.0 * p1 + p2) * t * t + (-p0 + p2) * t + 2.0 * p1)
+        //             } else {
+        //                 let p0 = &self.hopping_point[i - 2].coords;
+        //                 let p1 = &self.hopping_point[i - 1].coords;
+        //                 let p2 = &self.hopping_point[i].coords;
+        //                 let p3 = &self.hopping_point[i + 1].coords;
+        //                 0.5 * ((-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t * t * t
+        //                     + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t
+        //                     + (-p0 + p3) * t
+        //                     + 2.0 * p1)
+        //             };
+        //             vertices.push(Point2::new(x.x, x.y));
+        //         }
+        //     }
+        //     vertices
+        // };
+
+        // let vertices = {
+        //     let mut vertices: Vec<Vector2<f32>> = vec![];
+        //     for i in 1..catmull_rom_vertices.len() {
+        //         let p0 = if i == 1 {
+        //             &catmull_rom_vertices[0]
+        //         } else {
+        //             &catmull_rom_vertices[i - 2]
+        //         };
+        //         let p1 = &catmull_rom_vertices[i - 1];
+        //         let p2 = &catmull_rom_vertices[i];
+        //         let p3 = if i == catmull_rom_vertices.len() - 1 {
+        //             &catmull_rom_vertices[catmull_rom_vertices.len() - 1]
+        //         } else {
+        //             &catmull_rom_vertices[i + 1]
+        //         };
+        //         let d0 = (p2.coords - p0.coords).normalize();
+        //         let d0 = Vector2::new(d0.y, -d0.x).normalize();
+        //         let d1 = (p3.coords - p1.coords).normalize();
+        //         let d1 = Vector2::new(d1.y, -d1.x).normalize();
+        //         let v0 = p1.coords + d0 * self.thickness / 2.0;
+        //         let v1 = p1.coords - d0 * self.thickness / 2.0;
+        //         let v2 = p2.coords + d1 * self.thickness / 2.0;
+        //         let v3 = p2.coords - d1 * self.thickness / 2.0;
+        //         vertices.push(v0.clone());
+        //         vertices.push(v1.clone());
+        //         vertices.push(v2.clone());
+        //         vertices.push(v2);
+        //         vertices.push(v1);
+        //         vertices.push(v3);
+        //     }
+        //     vertices
+        // };
 
         let vertices = {
             let mut vertices: Vec<Vector2<f32>> = vec![];
-            for i in 1..catmull_rom_vertices.len() {
+            for i in 1..self.hopping_point.len() {
                 let p0 = if i == 1 {
-                    &catmull_rom_vertices[0]
+                    &self.hopping_point[0]
                 } else {
-                    &catmull_rom_vertices[i - 2]
+                    &self.hopping_point[i - 2]
                 };
-                let p1 = &catmull_rom_vertices[i - 1];
-                let p2 = &catmull_rom_vertices[i];
-                let p3 = if i == catmull_rom_vertices.len() - 1 {
-                    &catmull_rom_vertices[catmull_rom_vertices.len() - 1]
+                let p1 = &self.hopping_point[i - 1];
+                let p2 = &self.hopping_point[i];
+                let p3 = if i == self.hopping_point.len() - 1 {
+                    &self.hopping_point[self.hopping_point.len() - 1]
                 } else {
-                    &catmull_rom_vertices[i + 1]
+                    &self.hopping_point[i + 1]
                 };
                 let d0 = (p2.coords - p0.coords).normalize();
                 let d0 = Vector2::new(d0.y, -d0.x).normalize();
@@ -277,9 +312,9 @@ impl Stroke {
                 vertices.push(v0.clone());
                 vertices.push(v1.clone());
                 vertices.push(v2.clone());
-                vertices.push(v2.clone());
-                vertices.push(v1.clone());
-                vertices.push(v3.clone());
+                vertices.push(v2);
+                vertices.push(v1);
+                vertices.push(v3);
             }
             vertices
         };
@@ -327,7 +362,7 @@ impl Individual {
         stroke_num: u32,
         stroke_thickness: f32,
     ) -> Self {
-        let mut strokes = vec![];
+        // println!("[{}] new start", Local::now());
 
         let weighted_random_dist = WeightedIndex::new(importance).unwrap();
         let uniform_random_dist =
@@ -336,36 +371,49 @@ impl Individual {
 
         let weighted_random_stroke_num = (stroke_num as f64 * 0.95) as i32;
         let uniform_random_stroke_num = stroke_num as i32 - weighted_random_stroke_num;
-        for _ in 0..weighted_random_stroke_num {
-            let index = weighted_random_dist.sample(&mut rng);
-            let stroke = Stroke::new(
-                index,
-                &colors,
-                &directions,
-                &importance,
-                width,
-                height,
-                stroke_thickness,
-            );
-            strokes.push(stroke);
-        }
-        for _ in 0..uniform_random_stroke_num {
-            let index = uniform_random_dist.sample(&mut rng);
-            let stroke = Stroke::new(
-                index,
-                &colors,
-                &directions,
-                &importance,
-                width,
-                height,
-                stroke_thickness,
-            );
-            strokes.push(stroke);
-        }
 
-        strokes.sort_unstable_by(|a, b| a.importance.partial_cmp(&b.importance).unwrap());
+        let mut importance_strokes = (0..weighted_random_stroke_num)
+            .map(|_| weighted_random_dist.sample(&mut rng))
+            .collect::<Vec<_>>()
+            .par_iter()
+            .map(|&index| {
+                let stroke = Stroke::new(
+                    index,
+                    &colors,
+                    &directions,
+                    &importance,
+                    width,
+                    height,
+                    stroke_thickness,
+                );
+                stroke
+            })
+            .collect::<Vec<_>>();
+        let mut uniform_strokes = (0..uniform_random_stroke_num)
+            .map(|_| uniform_random_dist.sample(&mut rng))
+            .collect::<Vec<_>>()
+            .par_iter()
+            .map(|&index| {
+                let stroke = Stroke::new(
+                    index,
+                    &colors,
+                    &directions,
+                    &importance,
+                    width,
+                    height,
+                    stroke_thickness,
+                );
+                stroke
+            })
+            .collect::<Vec<_>>();
 
-        Self { strokes }
+        importance_strokes.append(&mut uniform_strokes);
+        importance_strokes
+            .sort_unstable_by(|a, b| a.importance.partial_cmp(&b.importance).unwrap());
+
+        Self {
+            strokes: importance_strokes,
+        }
     }
 
     pub fn distance(&self, other: &Self) -> i32 {

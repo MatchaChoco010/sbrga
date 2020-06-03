@@ -93,7 +93,7 @@ pub fn create_individual(
     let _gl_context = window.gl_create_context().unwrap();
     gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::os::raw::c_void);
 
-    let mut renderer = renderer::Renderer::new(width, height, &res)?;
+    let mut renderer = renderer::Renderer::new(width, height, width, height, &res)?;
 
     renderer.render_to_file(&individual, output_path)?;
 

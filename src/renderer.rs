@@ -1,9 +1,6 @@
-// use std::sync::Arc;
-// use std::time::Instant;
-
-// use accel::*;
 use anyhow::Result;
 use c_str_macro::c_str;
+// use chrono::Local;
 use delta_e::DE2000;
 use image;
 use na::{Matrix4, Point3, Vector2, Vector3, Vector4};
@@ -17,6 +14,8 @@ use crate::resources::Resources;
 pub struct Renderer {
     width: i32,
     height: i32,
+    save_image_width: i32,
+    save_image_height: i32,
     v_width: i32,
     v_height: i32,
     viewport: render_gl::Viewport,
@@ -24,10 +23,18 @@ pub struct Renderer {
     _shader_program: render_gl::Program,
     render_texture: gl::types::GLuint,
     frame_buffer: gl::types::GLuint,
+    save_image_render_texture: gl::types::GLuint,
+    save_image_frame_buffer: gl::types::GLuint,
 }
 
 impl Renderer {
-    pub fn new(width: i32, height: i32, res: &Resources) -> Result<Self> {
+    pub fn new(
+        width: i32,
+        height: i32,
+        save_image_width: i32,
+        save_image_height: i32,
+        res: &Resources,
+    ) -> Result<Self> {
         unsafe {
             gl::Enable(gl::MULTISAMPLE);
         }
@@ -101,9 +108,42 @@ impl Renderer {
             gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
         }
 
+        let mut save_image_render_texture: gl::types::GLuint = 0;
+        let mut save_image_frame_buffer: gl::types::GLuint = 0;
+        unsafe {
+            gl::GenTextures(1, &mut save_image_render_texture);
+            gl::BindTexture(gl::TEXTURE_2D, save_image_render_texture);
+            gl::TexImage2D(
+                gl::TEXTURE_2D,
+                0,
+                gl::RGBA8 as i32,
+                save_image_width as i32,
+                save_image_height as i32,
+                0,
+                gl::RGBA,
+                gl::FLOAT,
+                std::ptr::null() as *const gl::types::GLvoid,
+            );
+            gl::BindTexture(gl::TEXTURE_2D, 0);
+
+            gl::GenFramebuffers(1, &mut save_image_frame_buffer);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, save_image_frame_buffer);
+            gl::FramebufferTexture2D(
+                gl::FRAMEBUFFER,
+                gl::COLOR_ATTACHMENT0,
+                gl::TEXTURE_2D,
+                save_image_render_texture,
+                0,
+            );
+
+            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+        }
+
         Ok(Self {
             width,
             height,
+            save_image_width,
+            save_image_height,
             v_width: width,
             v_height: height,
             viewport,
@@ -111,24 +151,40 @@ impl Renderer {
             _shader_program: shader_program,
             render_texture,
             frame_buffer,
+            save_image_render_texture,
+            save_image_frame_buffer,
         })
     }
 
     fn render(&self, individual: &Individual) {
         self.color_buffer.clear();
 
+        // println!("[{}] create strokes", Local::now());
+        let mut ss = individual
+            .strokes
+            .par_iter()
+            // .iter()
+            .map(|stroke| {
+                let mut vertices = vec![];
+                let mut colors = vec![];
+                for v in stroke.vertices() {
+                    vertices.push(Vector2::new(
+                        v.x - self.width as f32 / 2.0,
+                        (self.height as f32 - 1.0 - v.y) - self.height as f32 / 2.0,
+                    ));
+                    colors.push(stroke.color.clone());
+                }
+                (vertices, colors)
+            })
+            .collect::<Vec<_>>();
         let mut vertices = vec![];
         let mut colors = vec![];
-        individual.strokes.iter().for_each(|stroke| {
-            for v in stroke.vertices() {
-                vertices.push(Vector2::new(
-                    v.x - self.width as f32 / 2.0,
-                    (self.height as f32 - 1.0 - v.y) - self.height as f32 / 2.0,
-                ));
-                colors.push(stroke.color.clone());
-            }
-        });
+        for i in 0..ss.len() {
+            vertices.append(&mut ss[i].0);
+            colors.append(&mut ss[i].1);
+        }
 
+        // println!("[{}] create vao", Local::now());
         let vertices_vbo = render_gl::buffer::ArrayBuffer::new();
         vertices_vbo.bind();
         vertices_vbo.static_draw_data(&vertices);
@@ -154,14 +210,10 @@ impl Renderer {
         }
         colors_vbo.unbind();
 
-        // let start = Instant::now();
-
+        // println!("[{}] draw arrays", Local::now());
         unsafe {
             gl::DrawArrays(gl::TRIANGLES, 0, vertices.len() as i32);
         }
-
-        // let end = start.elapsed();
-        // println!("Draw {}.{:03}s", end.as_secs(), end.as_millis());
     }
 
     pub fn render_to_vec(&mut self, individual: &Individual) -> Vec<Vector4<f32>> {
@@ -172,8 +224,10 @@ impl Renderer {
         self.viewport.update_size(self.width, self.height);
         self.viewport.set_used();
 
+        // println!("[{}] render", Local::now());
         self.render(individual);
 
+        // println!("[{}] read pixels", Local::now());
         let mut data = vec![Vector4::zeros(); (self.width * self.height) as usize];
         unsafe {
             gl::ReadPixels(
@@ -190,11 +244,37 @@ impl Renderer {
     }
 
     pub fn render_to_file(&mut self, individual: &Individual, output_path: &str) -> Result<()> {
-        let data = self.render_to_vec(individual);
+        unsafe {
+            gl::BindFramebuffer(gl::FRAMEBUFFER, self.save_image_frame_buffer);
+        }
 
-        let mut imgbuf = image::ImageBuffer::new(self.width as u32, self.height as u32);
+        self.viewport
+            .update_size(self.save_image_width, self.save_image_height);
+        self.viewport.set_used();
+
+        self.render(individual);
+
+        let mut data = vec![
+            Vector4::<f32>::zeros();
+            (self.save_image_width * self.save_image_height) as usize
+        ];
+        unsafe {
+            gl::ReadPixels(
+                0,
+                0,
+                self.save_image_width as i32,
+                self.save_image_height as i32,
+                gl::RGBA,
+                gl::FLOAT,
+                data.as_mut_ptr() as *mut gl::types::GLvoid,
+            );
+        }
+
+        let mut imgbuf =
+            image::ImageBuffer::new(self.save_image_width as u32, self.save_image_height as u32);
         for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-            let p = data[((self.height - 1 - y as i32) * self.width + x as i32) as usize];
+            let p = data[((self.save_image_height - 1 - y as i32) * self.save_image_width
+                + x as i32) as usize];
             *pixel = image::Rgba([
                 (255.0 * p.x) as u8,
                 (255.0 * p.y) as u8,
@@ -222,10 +302,10 @@ impl Renderer {
         colors: &Vec<Vector3<f32>>,
         importance: &Vec<f32>,
     ) -> f32 {
+        // println!("[{}] render to vec", Local::now());
         let data = self.render_to_vec(individual);
 
-        // let start = Instant::now();
-
+        // println!("[{}] calc score", Local::now());
         let score = data
             .par_iter()
             .enumerate()
@@ -253,9 +333,6 @@ impl Renderer {
                 (color_loss + alpha_loss) * w
             })
             .sum();
-
-        // let end = start.elapsed();
-        // println!("Score {}.{:03}s", end.as_secs(), end.as_millis());
 
         score
     }
@@ -310,6 +387,8 @@ impl Drop for Renderer {
         unsafe {
             gl::DeleteFramebuffers(1, &mut self.frame_buffer);
             gl::DeleteTextures(1, &mut self.render_texture);
+            gl::DeleteFramebuffers(1, &mut self.save_image_frame_buffer);
+            gl::DeleteTextures(1, &mut self.save_image_render_texture);
         }
     }
 }
