@@ -91,8 +91,8 @@ impl Stroke {
             let mut s0 = vec![pos];
             let mut s1 = vec![pos];
             {
-                // let dir = directions[index];
-                let dir = Vector2::new(directions[index].x, -directions[index].y).normalize();
+                let dir = directions[index];
+                // let dir = Vector2::new(directions[index].x, -directions[index].y).normalize();
                 let angle0 = Rotation2::rotation_between(&y, &dir).angle();
                 let angle1 = angle0 + 180.0_f32.to_radians();
                 let angle0 = angle0
@@ -137,7 +137,8 @@ impl Stroke {
                 let index = s_last.y.round() as i32 * width + s_last.x.round() as i32;
                 let dir = if 0 <= index && index < directions.len() as i32 {
                     let dir = directions[index as usize];
-                    Vector2::new(dir.x, -dir.y).normalize()
+                    // Vector2::new(dir.x, -dir.y).normalize()
+                    Vector2::new(dir.x, dir.y).normalize()
                 } else {
                     (s_last.coords - s_last_2.coords).normalize()
                 };

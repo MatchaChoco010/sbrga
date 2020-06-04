@@ -27,6 +27,7 @@ pub fn genetic_algorithm(
     save_generation_step: usize,
     save_width: i32,
     save_height: i32,
+    d_value: i32,
 ) -> Result<()> {
     const PROBABILITY_OF_MUTATION: f64 = 0.35;
     // const PROBABILITY_CROSSOVER_BIAS: f64 = 50.0;
@@ -169,7 +170,7 @@ pub fn genetic_algorithm(
         WeightedIndex::new(vec![1.0 - PROBABILITY_OF_MUTATION, PROBABILITY_OF_MUTATION]).unwrap();
 
     // let mut d = (top_individual.borrow().strokes.len() / 4) as i32;
-    let mut d = 50;
+    let mut d = d_value;
     let mut last_top_individual = top_individual;
 
     for gen in 1..=generation {
@@ -286,7 +287,7 @@ pub fn genetic_algorithm(
                 }
 
                 // d = (top_individual.borrow().strokes.len() as f32 * 0.35 * (1.0 - 0.35)) as i32;
-                d = 50;
+                d = d_value;
             }
         }
 
