@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::fs;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -252,11 +253,9 @@ pub fn genetic_algorithm(
                     "[{}] save top individual render sequence image",
                     Local::now()
                 );
-                renderer.render_to_sequence_file(
-                    &top_individual.borrow(),
-                    chunk_size,
-                    &(output_path.to_string() + ".gen-" + &gen.to_string()),
-                )?;
+                let out_dir = output_path.to_string() + ".gen-" + &gen.to_string();
+                fs::create_dir_all(&out_dir)?;
+                renderer.render_to_sequence_file(&top_individual.borrow(), chunk_size, &out_dir)?;
                 println!(
                     "[{}] save files: {}",
                     Local::now(),
