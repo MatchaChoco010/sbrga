@@ -339,6 +339,121 @@ impl Renderer {
         score
     }
 
+    pub fn render_to_sequence_file(
+        &mut self,
+        individual: &Individual,
+        chunk_size: usize,
+        output_path: &str,
+    ) -> Result<()> {
+        unsafe {
+            gl::BindFramebuffer(gl::FRAMEBUFFER, self.save_image_frame_buffer);
+        }
+
+        self.viewport
+            .update_size(self.save_image_width, self.save_image_height);
+        self.viewport.set_used();
+
+        let sss = individual
+            .strokes
+            .par_iter()
+            // .iter()
+            .map(|stroke| {
+                let mut vertices = vec![];
+                let mut colors = vec![];
+                for v in stroke.vertices() {
+                    vertices.push(Vector2::new(
+                        v.x - self.width as f32 / 2.0,
+                        (self.height as f32 - 1.0 - v.y) - self.height as f32 / 2.0,
+                    ));
+                    colors.push(Vector4::new(
+                        stroke.color.x as f32 / 255.0,
+                        stroke.color.y as f32 / 255.0,
+                        stroke.color.z as f32 / 255.0,
+                        stroke.color.w as f32 / 255.0,
+                    ));
+                }
+                (vertices, colors)
+            })
+            .collect::<Vec<_>>();
+        let sss: Vec<_> = sss
+            .chunks(chunk_size)
+            .map(|slice| {
+                let mut vs = vec![];
+                let mut cs = vec![];
+                for item in slice {
+                    vs.push(&item.0);
+                    cs.push(&item.1);
+                }
+                (vs, cs)
+            })
+            .collect();
+        for (i, ss) in sss.into_iter().enumerate() {
+            let vertices = ss.0;
+            let colors = ss.1;
+
+            let vertices_vbo = render_gl::buffer::ArrayBuffer::new();
+            vertices_vbo.bind();
+            vertices_vbo.static_draw_data(&vertices);
+            vertices_vbo.unbind();
+
+            let colors_vbo = render_gl::buffer::ArrayBuffer::new();
+            colors_vbo.bind();
+            colors_vbo.static_draw_data(&colors);
+            colors_vbo.unbind();
+
+            let vao = render_gl::buffer::VertexArray::new();
+            vao.bind();
+            vertices_vbo.bind();
+            unsafe {
+                gl::EnableVertexAttribArray(0);
+                gl::VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, 0, std::ptr::null());
+            }
+            vertices_vbo.unbind();
+            colors_vbo.bind();
+            unsafe {
+                gl::EnableVertexAttribArray(1);
+                gl::VertexAttribPointer(1, 4, gl::FLOAT, gl::FALSE, 0, std::ptr::null());
+            }
+            colors_vbo.unbind();
+
+            // println!("[{}] draw arrays", Local::now());
+            unsafe {
+                gl::DrawArrays(gl::TRIANGLES, 0, vertices.len() as i32);
+            }
+
+            let mut data = vec![
+                Vector4::<gl::types::GLuint>::zeros();
+                (self.save_image_width * self.save_image_height) as usize
+            ];
+            unsafe {
+                gl::ReadPixels(
+                    0,
+                    0,
+                    self.save_image_width as i32,
+                    self.save_image_height as i32,
+                    gl::RGBA,
+                    gl::UNSIGNED_INT,
+                    data.as_mut_ptr() as *mut gl::types::GLvoid,
+                );
+            }
+
+            let mut imgbuf = image::ImageBuffer::new(
+                self.save_image_width as u32,
+                self.save_image_height as u32,
+            );
+            for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
+                let p = data[((self.save_image_height - 1 - y as i32) * self.save_image_width
+                    + x as i32) as usize];
+                *pixel = image::Rgba([p.x as u8, p.y as u8, p.z as u8, p.w as u8]);
+            }
+
+            let output_path_with_i = output_path.to_string() + "/" + &i.to_string() + ".png";
+            imgbuf.save(output_path_with_i)?;
+        }
+
+        Ok(())
+    }
+
     // pub fn score_accel(
     //     &mut self,
     //     ctx: Arc<Context>,

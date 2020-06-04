@@ -83,6 +83,8 @@ enum Sbrga {
         height: i32,
         #[structopt(default_value = "50", long, about = "D value")]
         d_value: i32,
+        #[structopt(long, about = "save sequence file")]
+        save_sequence: Option<usize>,
     },
 }
 
@@ -152,6 +154,7 @@ fn main() -> Result<()> {
             width,
             height,
             d_value,
+            save_sequence,
         } => genetic_algorithm(
             color_map.to_str().unwrap(),
             dir_map.to_str().unwrap(),
@@ -166,6 +169,7 @@ fn main() -> Result<()> {
             width,
             height,
             d_value,
+            save_sequence,
         )?,
     }
 

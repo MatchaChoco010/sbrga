@@ -28,6 +28,7 @@ pub fn genetic_algorithm(
     save_width: i32,
     save_height: i32,
     d_value: i32,
+    save_sequence: Option<usize>,
 ) -> Result<()> {
     const PROBABILITY_OF_MUTATION: f64 = 0.35;
     // const PROBABILITY_CROSSOVER_BIAS: f64 = 50.0;
@@ -246,10 +247,27 @@ pub fn genetic_algorithm(
 
         // 保存指定されていたジェネレーションならば保存する。
         if save_generation.contains(&gen) {
-            println!("[{}] save top individual render image", Local::now());
-            let output_path = output_path.to_string() + ".gen-" + &gen.to_string() + ".png";
-            renderer.render_to_file(&top_individual.borrow(), &output_path)?;
-            println!("[{}] save file: {}", Local::now(), output_path);
+            if let Some(chunk_size) = save_sequence {
+                println!(
+                    "[{}] save top individual render sequence image",
+                    Local::now()
+                );
+                renderer.render_to_sequence_file(
+                    &top_individual.borrow(),
+                    chunk_size,
+                    &(output_path.to_string() + ".gen-" + &gen.to_string()),
+                )?;
+                println!(
+                    "[{}] save files: {}",
+                    Local::now(),
+                    output_path.to_string() + "/*.png"
+                );
+            } else {
+                println!("[{}] save top individual render image", Local::now());
+                let output_path = output_path.to_string() + ".gen-" + &gen.to_string() + ".png";
+                renderer.render_to_file(&top_individual.borrow(), &output_path)?;
+                println!("[{}] save file: {}", Local::now(), output_path);
+            }
         }
 
         // println!("[{}] crossover", Local::now());
