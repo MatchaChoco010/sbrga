@@ -314,8 +314,15 @@ impl Renderer {
             .enumerate()
             .map(|(i, v)| {
                 let v0 = v;
-                let v1 = colors[i];
-                let w = importance[i];
+                // let v1 = colors[i];
+                // let w = importance[i];
+                let (x, y) = (
+                    i as i32 % self.width,
+                    self.height - 1 - i as i32 / self.width,
+                );
+                let index = (y * self.width + x) as usize;
+                let v1 = colors[index];
+                let w = importance[index];
 
                 let c0 = [v0.x, v0.y, v0.z];
                 let c1 = [v1.x, v1.y, v1.z];
@@ -323,7 +330,7 @@ impl Renderer {
 
                 let a0 = v0.w as f32 / 255.0;
                 let a1 = 1.0;
-                let alpha_loss = (a0 - a1).powf(2.0) * 500.0;
+                let alpha_loss = (a0 - a1) * (a0 - a1) * 50.0;
 
                 (color_loss + alpha_loss) * w
             })
