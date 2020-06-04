@@ -388,8 +388,14 @@ impl Renderer {
             })
             .collect();
         for (i, ss) in sss.into_iter().enumerate() {
-            let vertices = ss.0;
-            let colors = ss.1;
+            let mut vertices = vec![];
+            let mut colors = vec![];
+            for v in ss.0 {
+                vertices.push(v);
+            }
+            for c in ss.1 {
+                colors.push(c);
+            }
 
             let vertices_vbo = render_gl::buffer::ArrayBuffer::new();
             vertices_vbo.bind();
