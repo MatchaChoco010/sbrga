@@ -91,7 +91,8 @@ impl Stroke {
             let mut s0 = vec![pos];
             let mut s1 = vec![pos];
             {
-                let dir = directions[index];
+                // let dir = directions[index];
+                let dir = Vector2::new(directions[index].x, -directions[index].y).normalize();
                 let angle0 = Rotation2::rotation_between(&y, &dir).angle();
                 let angle1 = angle0 + 180.0_f32.to_radians();
                 let angle0 = angle0
