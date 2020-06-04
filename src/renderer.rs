@@ -353,6 +353,8 @@ impl Renderer {
             .update_size(self.save_image_width, self.save_image_height);
         self.viewport.set_used();
 
+        self.color_buffer.clear();
+
         let sss = individual
             .strokes
             .par_iter()
@@ -381,21 +383,19 @@ impl Renderer {
                 let mut vs = vec![];
                 let mut cs = vec![];
                 for item in slice {
-                    vs.push(&item.0);
-                    cs.push(&item.1);
+                    for v in &item.0 {
+                        vs.push(v.clone());
+                    }
+                    for c in &item.1 {
+                        cs.push(c.clone());
+                    }
                 }
                 (vs, cs)
             })
             .collect();
         for (i, ss) in sss.into_iter().enumerate() {
-            let mut vertices = vec![];
-            let mut colors = vec![];
-            for v in ss.0 {
-                vertices.push(v);
-            }
-            for c in ss.1 {
-                colors.push(c);
-            }
+            let vertices = ss.0;
+            let colors = ss.1;
 
             let vertices_vbo = render_gl::buffer::ArrayBuffer::new();
             vertices_vbo.bind();
